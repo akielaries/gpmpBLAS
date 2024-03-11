@@ -32,34 +32,57 @@
 ! ************************************************************************/
 ! dgemm.f90
 
-module DGEMM 
+MODULE DGEMM 
     implicit none
 
-    integer, parameter :: MC = 384
-    integer, parameter :: KC = 384
-    integer, parameter :: NC = 4096
-    integer, parameter :: MR = 4
-    integer, parameter :: NR = 4
+    INTEGER, PARAMETER :: MC = 384
+    INTEGER, PARAMETER :: KC = 384
+    INTEGER, PARAMETER :: NC = 4096
+    INTEGER, PARAMETER :: MR = 4
+    INTEGER, PARAMETER :: NR = 4
 
 contains
 
-    subroutine pack_MRxk(k, A, incRowA, incColA, buffer)
-        integer, intent(in) :: k, incRowA, incColA
-        double precision, intent(in) :: A(incRowA,*)
-        double precision, intent(out) :: buffer(MR, KC)
-        integer :: i, j
+    ! packs panels from matrix A without padding
+    SUBROUTINE pack_MRxk(k, A, incRowA, incColA, buffer)
+        INTEGER, INTENT(IN) :: k, incRowA, incColA
+        DOUBLE PRECISION, INTENT(IN) :: A(incRowA,*)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(MR, KC)
+        INTEGER :: i, j
 
-        do j = 1, k
-            do i = 1, MR
+        DO j = 1, k
+            DO i = 1, MR
                 !buffer(i,j) = A((i-1)*incRowA + 1)
                 buffer(i, j) = A(i, (j - 1) * incColA + 1)
 
+            END DO
+        END DO
+    END SUBROUTINE pack_MRxk
+
+    ! packs panel from A with padding if needed
+    SUBROUTINE pack_A(mc, kc, A, incRowA, incColA, buffer)
+        INTEGER, INTENT(IN) :: mc, kc, incRowA, incColA
+        DOUBLE PRECISION, INTENT(IN) :: A(mc, kc)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(mc*kc)
+        INTEGER :: mp, mr, i, j
+
+        DO i = 1, mp
+            call pack_MRxk(kc, A((i-1)*MR+1, 1), incRowA, incColA, buffer((i-1)*kc*MR+1:i*kc*MR))
+
+            END DO
+
+        if (mr > 0) THEN
+            do j = 1, kc
+                buffer((mp*kc+j-1)*MR+1:(mp*kc+j)*MR) = A((mp*MR+1):(mp*MR+mr), j)
+                buffer((mp*kc+j)*MR+1:(mp*kc+j+1)*MR) = 0.0
             end do
-        end do
-    end subroutine pack_MRxk
+        end if
 
 
 
-end module DGEMM 
+    END SUBROUTINE pack_A
+
+
+END MODULE DGEMM 
 
 
