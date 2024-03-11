@@ -1,4 +1,4 @@
-module dgemm
+module igemm
     implicit none
 
     integer, parameter :: MC = 384
@@ -262,5 +262,5 @@ contains
         end if
     end subroutine dgescal
 
-end module dgemm
+end module igemm
 
