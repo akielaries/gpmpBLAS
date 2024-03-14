@@ -32,7 +32,7 @@ contains
         _mr = mc%MR
 
         do i = 1, mp
-           call pack_MRxk(kc, A, incRowA, incColA, buffer((i - 1)*kc*MR + 1, 1))
+            call pack_MRxk(kc, A, incRowA, incColA, buffer((i - 1)*kc*MR + 1, 1))
             A = A + MR*incRowA
         end do
 
@@ -72,7 +72,7 @@ contains
         _nr = nc%NR
 
         do j = 1, np
-           call pack_kxNR(kc, B, incRowB, incColB, buffer(1, (j - 1)*kc*NR + 1))
+            call pack_kxNR(kc, B, incRowB, incColB, buffer(1, (j - 1)*kc*NR + 1))
             B = B + NR*incColB
         end do
 
@@ -155,22 +155,22 @@ contains
                 mr = merge(MR, _mr, i /= mp .or. _mr == 0)
 
                 if (mr == MR .and. nr == NR) then
-                  call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
+                    call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
                                             _B(1, (j - 1)*kc*NR + 1), beta, &
-            C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
+                                            C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
                 else
-                  call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
+                    call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
                                             _B(1, (j - 1)*kc*NR + 1), 0.0, &
                                             _C, 1, MR)
                     call dgescal(mr, nr, beta, C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
                     call dgeaxpy(mr, nr, 1.0, _C, 1, MR, &
-            C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
+                                 C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
                 end if
             end do
         end do
     end subroutine dgemm_macro_kernel
 
- subroutine dgemm_nn(m, n, k, alpha, A, incRowA, incColA, B, incRowB, incColB, &
+    subroutine dgemm_nn(m, n, k, alpha, A, incRowA, incColA, B, incRowB, incColB, &
                         beta, C, incRowC, incColC)
         integer, intent(in) :: m, n, k, incRowA, incColA, incRowB, incColB, incRowC, incColC
         double precision, intent(in) :: alpha, beta
@@ -200,17 +200,17 @@ contains
                 kc = merge(KC, _kc, l /= kb .or. _kc == 0)
                 _beta = merge(beta, 1.0, l == 1)
 
-        call pack_B(kc, nc, B((l - 1)*KC*incRowB + 1, (j - 1)*NC*incColB + 1), &
+                call pack_B(kc, nc, B((l - 1)*KC*incRowB + 1, (j - 1)*NC*incColB + 1), &
                             incRowB, incColB, _B)
 
                 do i = 1, mb
                     mc = merge(MC, _mc, i /= mb .or. _mc == 0)
 
-        call pack_A(mc, kc, A((i - 1)*MC*incRowA + (l - 1)*KC*incColA + 1, 1), &
+                    call pack_A(mc, kc, A((i - 1)*MC*incRowA + (l - 1)*KC*incColA + 1, 1), &
                                 incRowA, incColA, _A)
 
                     call dgemm_macro_kernel(mc, nc, kc, alpha, _beta, &
-                            C((i - 1)*MC*incRowC + (j - 1)*NC*incColC + 1, 1), &
+                                            C((i - 1)*MC*incRowC + (j - 1)*NC*incColC + 1, 1), &
                                             incRowC, incColC)
                 end do
             end do
@@ -228,14 +228,14 @@ contains
             do j = 1, n
                 do i = 1, m
                     Y((i - 1)*incRowY + (j - 1)*incColY + 1) = Y((i - 1)*incRowY + (j - 1)*incColY + 1) + &
-                                  alpha*X((i - 1)*incRowX + (j - 1)*incColX + 1)
+                                                               alpha*X((i - 1)*incRowX + (j - 1)*incColX + 1)
                 end do
             end do
         else
             do j = 1, n
                 do i = 1, m
                     Y((i - 1)*incRowY + (j - 1)*incColY + 1) = Y((i - 1)*incRowY + (j - 1)*incColY + 1) + &
-                                        X((i - 1)*incRowX + (j - 1)*incColX + 1)
+                                                               X((i - 1)*incRowX + (j - 1)*incColX + 1)
                 end do
             end do
         end if

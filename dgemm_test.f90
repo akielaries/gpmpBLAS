@@ -1,266 +1,150 @@
-module dgemm
+!/*************************************************************************
+! *
+! *  Project
+! *                         _____ _____  __  __ _____
+! *                        / ____|  __ \|  \/  |  __ \
+! *  ___  _ __   ___ _ __ | |  __| |__) | \  / | |__) |
+! * / _ \| '_ \ / _ \ '_ \| | |_ |  ___/| |\/| |  ___/
+! *| (_) | |_) |  __/ | | | |__| | |    | |  | | |
+! * \___/| .__/ \___|_| |_|\_____|_|    |_|  |_|_|
+! *      | |
+! *      |_|
+! *
+! * Copyright (C) Akiel Aries, <akiel@akiel.org>, et al.
+! *
+! * This software is licensed as described in the file LICENSE, which
+! * you should have received as part of this distribution. The terms
+! * among other details are referenced in the official documentation
+! * seen here : https://akielaries.github.io/openGPMP/ along with
+! * important files seen in this project.
+! *
+! * You may opt to use, copy, modify, merge, publish, distribute
+! * and/or sell copies of the Software, and permit persons to whom
+! * the Software is furnished to do so, under the terms of the
+! * LICENSE file. As this is an Open Source effort, all implementations
+! * must be of the same methodology.
+! *
+! *
+! *
+! * This software is distributed on an AS IS basis, WITHOUT
+! * WARRANTY OF ANY KIND, either express or implied.
+! *
+! ************************************************************************/
+! dgemm.f90
+
+MODULE DGEMM
     implicit none
 
-    integer, parameter :: MC = 384
-    integer, parameter :: KC = 384
-    integer, parameter :: NC = 4096
-    integer, parameter :: MR = 4
-    integer, parameter :: NR = 4
+    INTEGER, PARAMETER :: MC = 384
+    INTEGER, PARAMETER :: KC = 384
+    INTEGER, PARAMETER :: NC = 4096
+    INTEGER, PARAMETER :: MR = 4
+    INTEGER, PARAMETER :: NR = 4
 
 contains
 
-    subroutine pack_MRxk(k, A, incRowA, incColA, buffer)
-        integer, intent(in) :: k, incRowA, incColA
-        double precision, intent(in) :: A(incRowA, *)
-        double precision, intent(out) :: buffer(MR, KC)
-        integer :: i, j
+    ! packs panels from matrix A without padding
+    SUBROUTINE pack_MRxk(k, A, incRowA, incColA, buffer)
+        INTEGER, INTENT(IN) :: k, incRowA, incColA
+        DOUBLE PRECISION, INTENT(IN) :: A(incRowA, *)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(MR, KC)
 
-        do j = 1, k
-            do i = 1, MR
-                buffer(i, j) = A((i - 1)*incRowA + 1)
-            end do
-        end do
-    end subroutine pack_MRxk
+        INTEGER :: i, j
 
-    subroutine pack_A(mc, kc, A, incRowA, incColA, buffer)
-        integer, intent(in) :: mc, kc, incRowA, incColA
-        double precision, intent(in) :: A(incRowA, *)
-        double precision, intent(out) :: buffer(MC, KC)
-        integer :: mp, _mr, i, j
+        DO j = 1, k
+            DO i = 1, MR
+                !buffer(i,j) = A((i-1)*incRowA + 1)
+                buffer(i, j) = A(i, (j - 1)*incColA + 1)
 
-        mp = mc/MR
-        _mr = mc%MR
+            END DO
+        END DO
+    END SUBROUTINE pack_MRxk
 
-        do i = 1, mp
-           call pack_MRxk(kc, A, incRowA, incColA, buffer((i - 1)*kc*MR + 1, 1))
-            A = A + MR*incRowA
-        end do
+    ! packs panel from A with padding if needed
+    SUBROUTINE pack_A(mc, kc, A, incRowA, incColA, buffer)
+        INTEGER, INTENT(IN) :: mc, kc, incRowA, incColA
+        DOUBLE PRECISION, INTENT(IN) :: A(mc, kc)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(mc*kc)
 
-        if (_mr > 0) then
-            do j = 1, kc
-                do i = 1, _mr
-                    buffer(i, j) = A((i - 1)*incRowA + 1)
-                end do
-                do i = _mr + 1, MR
-                    buffer(i, j) = 0.0
-                end do
-                A = A + incColA
-            end do
-        end if
-    end subroutine pack_A
+        INTEGER :: mp, mr, i, j
 
-    subroutine pack_kxNR(k, B, incRowB, incColB, buffer)
-        integer, intent(in) :: k, incRowB, incColB
-        double precision, intent(in) :: B(*, incColB)
-        double precision, intent(out) :: buffer(KC, NR)
-        integer :: i, j
+        DO i = 1, mp
+            CALL pack_MRxk(kc, A((i - 1)*MR + 1, 1), incRowA, incColA, buffer((i - 1)*kc*MR + 1:i*kc*MR))
 
-        do i = 1, k
-            do j = 1, NR
+        END DO
+
+        IF (mr > 0) THEN
+            DO j = 1, kc
+                buffer((mp*kc + j - 1)*MR + 1:(mp*kc + j)*MR) = A((mp*MR + 1):(mp*MR + mr), j)
+                buffer((mp*kc + j)*MR + 1:(mp*kc + j + 1)*MR) = 0.0
+            END DO
+
+        END IF
+
+    END SUBROUTINE pack_A
+
+    ! packs panels from B without padding
+    SUBROUTINE pack_kxNR(k, B, incRowB, incColB, buffer)
+        INTEGER, INTENT(IN) :: k, incRowB, incColB
+        DOUBLE PRECISION, INTENT(IN) :: B(incRowB, *)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(MR, KC)
+        INTEGER :: i, j
+
+        DO j = 1, k
+            DO i = 1, MR
+
                 buffer(i, j) = B(i, (j - 1)*incColB + 1)
-            end do
-        end do
-    end subroutine pack_kxNR
 
-    subroutine pack_B(kc, nc, B, incRowB, incColB, buffer)
-        integer, intent(in) :: kc, nc, incRowB, incColB
-        double precision, intent(in) :: B(*, incColB)
-        double precision, intent(out) :: buffer(KC, NC)
-        integer :: np, _nr, i, j
+            END DO
+        END DO
 
-        np = nc/NR
-        _nr = nc%NR
+    END SUBROUTINE pack_kxNR
 
-        do j = 1, np
-           call pack_kxNR(kc, B, incRowB, incColB, buffer(1, (j - 1)*kc*NR + 1))
-            B = B + NR*incColB
-        end do
+    ! packs panel from B with padding if needed
+    SUBROUTINE pack_B(kc, nc, B, incRowB, incColB, buffer)
+        INTEGER, INTENT(IN) :: kc, nc, incRowB, incColB
+        DOUBLE PRECISION, INTENT(IN) :: B(kc, nc)
+        DOUBLE PRECISION, INTENT(OUT) :: buffer(kc*nc)
 
-        if (_nr > 0) then
-            do i = 1, kc
-                do j = 1, _nr
-                    buffer(i, j) = B(i, (j - 1)*incColB + 1)
-                end do
-                do j = _nr + 1, NR
-                    buffer(i, j) = 0.0
-                end do
-                B = B + incRowB
-            end do
-        end if
-    end subroutine pack_B
+        INTEGER :: np, nr, i, j
 
-    subroutine dgemm_micro_kernel(kc, alpha, A, B, beta, C, incRowC, incColC)
-        integer, intent(in) :: kc, incRowC, incColC
-        double precision, intent(in) :: alpha, A(*), B(*)
-        double precision, intent(inout) :: beta, C(incRowC, *)
-        double precision :: AB(MR, NR)
-        integer :: i, j, l
+        DO i = 1, np
+            CALL pack_kxNR(kc, B((i - 1)*NR + 1, 1), incRowB, incColB, buffer((i - 1)*kc*NR + 1:i*kc*NR))
 
+        END DO
+
+        IF (nr > 0) THEN
+            DO j = 1, kc
+                buffer((np*kc + j - 1)*NR + 1:(np*nc + j)*NR) = B((np*NR + 1):(np*NR + nr), j)
+                buffer((np*kc + j)*NR + 1:(np*kc + j + 1)*NR) = 0.0
+            END DO
+
+        END IF
+
+    END SUBROUTINE pack_B
+
+    ! micro kernel for multiplying panels from A and B
+    SUBROUTINE micro_kernel(kc, alpha, A, B, beta, C, incRowC, incColC)
+        INTEGER, INTENT(IN) :: kc, incRowC, incColC
+        DOUBLE PRECISION, INTENT(IN) :: alpha, beta, A(MR), B(NR)
+        DOUBLE PRECISION, INTENT(INOUT) :: C(MR, NR)
+
+        DOUBLE PRECISION :: AB(MR*NR)
+        INTEGER :: i, j, l
+
+        ! Compute AB = A*B
         AB = 0.0
-
-        do l = 1, kc
-            do j = 1, NR
-                do i = 1, MR
-                    AB(i, j) = AB(i, j) + A((i - 1)*MR + 1)*B((j - 1)*kc + i)
-                end do
-            end do
+        DO l = 1, kc
+            DO j = 1, NR
+                DO i = 1, MR
+                    AB(i, j) = AB(i, j) + A(i)*B(j)
+                END DO
+            END DO
             A = A + MR
             B = B + NR
-        end do
+        END DO
 
-        if (beta == 0.0) then
-            do j = 1, NR
-                do i = 1, MR
-                    C((i - 1)*incRowC + (j - 1)*incColC + 1) = 0.0
-                end do
-            end do
-        elseif (beta /= 1.0) then
-            do j = 1, NR
-                do i = 1, MR
-                    C((i - 1)*incRowC + (j - 1)*incColC + 1) = beta*C((i - 1)*incRowC + (j - 1)*incColC + 1)
-                end do
-            end do
-        end if
+    END SUBROUTINE micro_kernel
 
-        if (alpha == 1.0) then
-            do j = 1, NR
-                do i = 1, MR
-                    C((i - 1)*incRowC + (j - 1)*incColC + 1) = C((i - 1)*incRowC + (j - 1)*incColC + 1) + AB(i, j)
-                end do
-            end do
-        else
-            do j = 1, NR
-                do i = 1, MR
-                    C((i - 1)*incRowC + (j - 1)*incColC + 1) = C((i - 1)*incRowC + (j - 1)*incColC + 1) + alpha*AB(i, j)
-                end do
-            end do
-        end if
-    end subroutine dgemm_micro_kernel
-
-    subroutine dgemm_macro_kernel(mc, nc, kc, alpha, beta, C, incRowC, incColC)
-        integer, intent(in) :: mc, nc, kc, incRowC, incColC
-        double precision, intent(in) :: alpha, beta
-        double precision, intent(inout) :: C(incRowC, *)
-        double precision :: _A(MC, KC), _B(KC, NC), _C(MR, NR)
-        integer :: mp, np, _mr, _nr, i, j, mr, nr
-
-        mp = (mc + MR - 1)/MR
-        np = (nc + NR - 1)/NR
-        _mr = mod(mc, MR)
-        _nr = mod(nc, NR)
-
-        do j = 1, np
-            nr = merge(NR, _nr, j /= np .or. _nr == 0)
-            do i = 1, mp
-                mr = merge(MR, _mr, i /= mp .or. _mr == 0)
-
-                if (mr == MR .and. nr == NR) then
-                  call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
-                                            _B(1, (j - 1)*kc*NR + 1), beta, &
-            C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
-                else
-                  call dgemm_micro_kernel(kc, alpha, _A((i - 1)*kc*MR + 1, 1), &
-                                            _B(1, (j - 1)*kc*NR + 1), 0.0, &
-                                            _C, 1, MR)
-                    call dgescal(mr, nr, beta, C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
-                    call dgeaxpy(mr, nr, 1.0, _C, 1, MR, &
-            C((i - 1)*MR*incRowC + (j - 1)*NR*incColC + 1, 1), incRowC, incColC)
-                end if
-            end do
-        end do
-    end subroutine dgemm_macro_kernel
-
- subroutine dgemm_nn(m, n, k, alpha, A, incRowA, incColA, B, incRowB, incColB, &
-                        beta, C, incRowC, incColC)
-        integer, intent(in) :: m, n, k, incRowA, incColA, incRowB, incColB, incRowC, incColC
-        double precision, intent(in) :: alpha, beta
-        double precision, intent(in) :: A(incRowA, *), B(incRowB, *)
-        double precision, intent(inout) :: C(incRowC, *)
-        integer :: mb, nb, kb, _mc, _nc, _kc, mc, nc, kc, i, j, l
-
-        double precision :: _A(MC, KC), _B(KC, NC), _C(MR, NR)
-        double precision :: _beta
-
-        mb = (m + MC - 1)/MC
-        nb = (n + NC - 1)/NC
-        kb = (k + KC - 1)/KC
-        _mc = mod(m, MC)
-        _nc = mod(n, NC)
-        _kc = mod(k, KC)
-
-        if (alpha == 0.0 .or. k == 0) then
-            call dgescal(m, n, beta, C, incRowC, incColC)
-            return
-        end if
-
-        do j = 1, nb
-            nc = merge(NC, _nc, j /= nb .or. _nc == 0)
-
-            do l = 1, kb
-                kc = merge(KC, _kc, l /= kb .or. _kc == 0)
-                _beta = merge(beta, 1.0, l == 1)
-
-        call pack_B(kc, nc, B((l - 1)*KC*incRowB + 1, (j - 1)*NC*incColB + 1), &
-                            incRowB, incColB, _B)
-
-                do i = 1, mb
-                    mc = merge(MC, _mc, i /= mb .or. _mc == 0)
-
-        call pack_A(mc, kc, A((i - 1)*MC*incRowA + (l - 1)*KC*incColA + 1, 1), &
-                                incRowA, incColA, _A)
-
-                    call dgemm_macro_kernel(mc, nc, kc, alpha, _beta, &
-                            C((i - 1)*MC*incRowC + (j - 1)*NC*incColC + 1, 1), &
-                                            incRowC, incColC)
-                end do
-            end do
-        end do
-    end subroutine dgemm_nn
-
-    subroutine dgeaxpy(m, n, alpha, X, incRowX, incColX, Y, incRowY, incColY)
-        integer, intent(in) :: m, n, incRowX, incColX, incRowY, incColY
-        double precision, intent(in) :: alpha
-        double precision, intent(in) :: X(incRowX, *)
-        double precision, intent(inout) :: Y(incRowY, *)
-        integer :: i, j
-
-        if (alpha /= 1.0) then
-            do j = 1, n
-                do i = 1, m
-                    Y((i - 1)*incRowY + (j - 1)*incColY + 1) = Y((i - 1)*incRowY + (j - 1)*incColY + 1) + &
-                                  alpha*X((i - 1)*incRowX + (j - 1)*incColX + 1)
-                end do
-            end do
-        else
-            do j = 1, n
-                do i = 1, m
-                    Y((i - 1)*incRowY + (j - 1)*incColY + 1) = Y((i - 1)*incRowY + (j - 1)*incColY + 1) + &
-                                        X((i - 1)*incRowX + (j - 1)*incColX + 1)
-                end do
-            end do
-        end if
-    end subroutine dgeaxpy
-
-    subroutine dgescal(m, n, alpha, X, incRowX, incColX)
-        integer, intent(in) :: m, n, incRowX, incColX
-        double precision, intent(in) :: alpha
-        double precision, intent(inout) :: X(incRowX, *)
-        integer :: i, j
-
-        if (alpha /= 0.0) then
-            do j = 1, n
-                do i = 1, m
-                    X((i - 1)*incRowX + (j - 1)*incColX + 1) = alpha*X((i - 1)*incRowX + (j - 1)*incColX + 1)
-                end do
-            end do
-        else
-            do j = 1, n
-                do i = 1, m
-                    X((i - 1)*incRowX + (j - 1)*incColX + 1) = 0.0
-                end do
-            end do
-        end if
-    end subroutine dgescal
-
-end module dgemm
+END MODULE DGEMM
 
