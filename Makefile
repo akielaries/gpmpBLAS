@@ -9,7 +9,6 @@ BUILDDIR 	= build
 SRCS 		= dgemm.f xerbla.f lsame.f ex_dgemm.f90
 OBJS 		= $(patsubst %.f,$(BUILDDIR)/%.o,$(patsubst %.f90,$(BUILDDIR)/%.o,$(SRCS)))
 
-
 # Executable
 EXEC 		= ex_dgemm
 
