@@ -1,25 +1,26 @@
 PROGRAM DGEMM_EX
-    ! the DGEMM routine is ideal, opposed to a naive implementation, for larger 
-    ! matrices
-
     EXTERNAL DGEMM
 
     ! Declarations
-    INTEGER, PARAMETER :: M = 1024, N = 1024, K = 1024
-    INTEGER :: LDA, LDB, LDC, I, J, KK
+    INTEGER, PARAMETER :: M = 3, N = 3, K = 3
+    INTEGER :: LDA, LDB, LDC, I, J
     DOUBLE PRECISION :: ALPHA, BETA
     DOUBLE PRECISION :: A(M, K), B(K, N), C(M, N)
     CHARACTER :: TRANSA, TRANSB
     ! MATMUL result mtx
-    DOUBLE PRECISION :: MATMUL_MTX_RES(M,N), NAIVE_RES(M,N)
+    DOUBLE PRECISION :: MATMUL_MTX_RES(M,N)
     LOGICAL :: EQUAL_MTX
     ! TIMERS
-    REAL :: DGEMM_ST, DGEMM_END, MATMUL_ST, MATMUL_END, NAIVE_ST, NAIVE_END
+    REAL :: MATMUL_ST, MAMTUL_END, DGEMM_ST, DGEMM_END
 
     ! Initialize input matrices A and B
-    CALL RANDOM_SEED()
-    CALL RANDOM_NUMBER(A)
-    CALL RANDOM_NUMBER(B)
+    A = RESHAPE([1.0, 2.0, 3.0, &
+                 4.0, 5.0, 6.0, &
+                 7.0, 8.0, 9.0], [M, K])
+
+    B = RESHAPE([1.0, 0.0, 0.0, &
+                 0.0, 1.0, 0.0, &
+                 0.0, 0.0, 1.0], [K, N])
 
 
     ! PARAMS
@@ -64,25 +65,8 @@ PROGRAM DGEMM_EX
     CALL DGEMM(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC)
     CALL CPU_TIME(DGEMM_END)
 
-    CALL CPU_TIME(MATMUL_ST)
     ! Call FORTRAN MATMUL routine for matrix multiplication
     MATMUL_MTX_RES = MATMUL(A, B)
-    CALL CPU_TIME(MATMUL_END)
-
-    ! Naive implementation of matrix multiplication
-    NAIVE_RES = 0.0
-
-    CALL CPU_TIME(NAIVE_ST)
-    DO I = 1, M
-        DO J = 1, N
-            DO KK = 1, K
-                NAIVE_RES(I, J) = NAIVE_RES(I, J) + A(I, KK) * B(KK, J)
-            END DO
-        END DO
-    END DO
-
-    CALL CPU_TIME(NAIVE_END)
-
 
     ! Print the result matrix C
     !PRINT *, "BLAS Matrix C:"
@@ -108,7 +92,7 @@ PROGRAM DGEMM_EX
 
     DO I = 1, M
         DO J = 1, N  
-            IF (ABS(C(I, J) - NAIVE_RES(I, J)) > 1.0E-10) THEN
+            IF (ABS(C(I, J) - MATMUL_MTX_RES(I, J)) > 1.0E-10) THEN
 
                 EQUAL_MTX = .FALSE.
 
@@ -125,8 +109,7 @@ PROGRAM DGEMM_EX
     ENDIF
 
     PRINT '("DGEMM time = ",f6.3," seconds")', DGEMM_END-DGEMM_ST
-    PRINT '("MATMUL time = ",f6.3," seconds")', MATMUL_END-MATMUL_ST
-    PRINT '("NAIVE time = ",f6.3," seconds")', NAIVE_END-NAIVE_ST
+
 
 
 END PROGRAM DGEMM_EX
