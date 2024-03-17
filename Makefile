@@ -6,7 +6,7 @@ FFLAGS 		= -Wall -Wextra
 BUILDDIR 	= build
 
 # Files
-SRCS 		= dgemm.f xerbla.f lsame.f ex_dgemm.f90
+SRCS 		= dgemm.f xerbla.f lsame.f ex_dgemm0.f90
 OBJS 		= $(patsubst %.f,$(BUILDDIR)/%.o,$(patsubst %.f90,$(BUILDDIR)/%.o,$(SRCS)))
 
 # Executable

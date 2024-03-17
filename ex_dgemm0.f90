@@ -1,6 +1,6 @@
 PROGRAM DGEMM_EX
-    ! the DGEMM routine is ideal, opposed to a naive implementation, for larger 
-    ! matrices
+    ! the DGEMM routine is ideal, opposed to the naive schoolbook On^3 
+    ! implementation, for larger matrices
 
     EXTERNAL DGEMM
 
@@ -65,7 +65,7 @@ PROGRAM DGEMM_EX
     CALL CPU_TIME(DGEMM_END)
 
     CALL CPU_TIME(MATMUL_ST)
-    ! Call FORTRAN MATMUL routine for matrix multiplication
+    ! Call FORTRAN MATMUL routine using intrinsics for matrix multiplication
     MATMUL_MTX_RES = MATMUL(A, B)
     CALL CPU_TIME(MATMUL_END)
 
