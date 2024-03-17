@@ -11,7 +11,7 @@ SUBROUTINE IGEMM(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC)
     !  Purpose
     !  =======
     !
-    !  DGEMM  performs one of the matrix-matrix operations
+    !  IGEMM  performs one of the matrix-matrix operations
     !
     !     C := alpha*op( A )*op( B ) + beta*C,
     !
@@ -187,8 +187,8 @@ SUBROUTINE IGEMM(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC)
         INFO = 13
     END IF
     IF (INFO .NE. 0) THEN
-        !CALL XERBLA('DGEMM ', INFO)
-        PRINT *, "** Error in DGEMM: INFO = ", INFO
+        !CALL XERBLA('IGEMM ', INFO)
+        PRINT *, "** Error in IGEMM: INFO = ", INFO
 
         RETURN
     END IF
